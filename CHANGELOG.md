@@ -3,6 +3,76 @@
 This file is the source of truth for release notes.
 The newest entry must match the version in `WandEnhancer/Properties/AssemblyInfo.cs`.
 
+## [2.2.1.0] - 2026-11-04
+
+### Features
+
+- The patch dialog now remembers your last choices (patches, method, auto-apply, custom scripts), and the main window remembers the Wand install. By @w0wzahh in #387.
+- A Re-detect button next to the install path rescans the current install after a Wand update, without restarting the app. By @w0wzahh in #387.
+- A Copy diagnostics button next to the log copies the enhancer version, OS, install path, Wand version and patch state, ready to paste into a bug report. By @w0wzahh in #387.
+
+### Fixes
+
+- Fixed the patcher targeting an old Wand version after an update. The latest install was chosen by the folder's modification time, which a virus scan or the enhancer's own backup can bump on the previous version. It is now chosen by the version in the folder name. By @w0wzahh in #383. #374
+- Restore now removes the deployed `WandEnhancerWatcher.exe`, and a file that is still locked is skipped with a warning instead of failing the Restore. By @w0wzahh in #386.
+- The log now warns when a newer Wand version sits next to the selected one. By @w0wzahh in #386. #374
+- Fixed the web tests failing on a source ZIP download, which stopped the build at "Test web-panel". #384
+
+## [2.2.0.0] - 2026-11-01
+
+### Features
+
+- Drag the Wand folder or `Wand.exe` onto the window to pick the install when it is not detected.
+- Bengali (Bangladesh) language by @amiMohammad in #305.
+- The remote panel gives a short haptic tap on toggles, action buttons and steppers. It works in Android browsers only, iOS Safari has no Vibration API.
+
+### Fixes
+
+- Fixed Patch and Restore failing on files still locked by Wand helpers. Helpers such as Squirrel's `Update.exe`, crashpad and the deployed watcher are now closed by executable path, file operations retry while a lock clears, and a lock that stays names the process holding it. By @w0wzahh in #359. #181 #326
+- Fixed the build failing when the checkout path contains `&`. By @w0wzahh in #359.
+- Fixed a failed restore of the original files leaving `app.asar.unpacked` half empty and Wand unable to start. That step is now rolled back with the rest of the patch.
+- Fixed sharing violations while neutralizing the integrity check: the auxiliary service is now closed before Patch and Restore. Also fixed the missing `netstandard` reference in the build. By @LastRq in #301.
+- A patch now fails and rolls back if the auxiliary service disappears while patching.
+- Auto-apply now waits for Squirrel's updater to exit before patching the new version.
+- The update watcher is restarted when a Patch fails, instead of staying stopped.
+
+### Improvements
+
+- Restore keeps `launcher.log` and `launcher.prev.log`, and manual Patch and Restore write to `launcher.log` too, so one file holds the whole story.
+- The README and the bug report template now say which logs to attach and list the usual causes: an unpatched Wand update and antivirus quarantine.
+
+## [2.1.1.0] - 2026-10-18
+
+### Fixes
+
+- Fixed trainers failing to start after enhancing on Wand 12.61.0 and newer: the auxiliary service rejected trainer injection with `InjectDll: Client integrity check failed`, which Wand shows as "We're having trouble loading the mods into your game". Fixed by @RatedRCustomer in #345. #311 #320 #334 #343 #347 #354
+- Fixed auto-apply after update, which never actually fired: Squirrel rewrites the root execution stub while applying the update, erasing the deployed launcher before it could run. A background update watcher by @Glitxhhh from #318 now re-applies the saved patch selection the moment a new Wand version lands, starts with Windows, and stops on Restore.
+
+## [2.1.0.0] - 2026-09-09
+
+### Features
+
+- **New fixed static patch method, now the default.** It applies the patch on disk, which is more stable for most users than the runtime approach - so it is the default now. A *Patch method* selector at the top of the patch dialog switches between it and the in-memory *Supervised* method, with an info note on the trade-off.
+- The deployed launcher now wears Wand's own icon, so replaced shortcuts look unchanged.
+
+### Improvements
+
+- *Auto-apply after updates* is off by default.
+
+## [2.0.0.1] - 2026-09-07
+
+### Fixes
+
+- Fixed Wand opening to a black window that only Task Manager could close, and every further click on the shortcut landing in the same place. Electron runs one Wand at a time, so each new launch was handed straight to the instance already holding that window - an instance no launcher is watching, whose windows can never come back. The launcher now recognises the handover and says what to close. #214 #272 #276 #286
+- Fixed the patch missing processes the launcher is not allowed to look inside. Windows gives an executable one address for as long as the machine is up, so the launcher now takes that address from the process it starts itself instead of asking each new child for it at the moment the child is most guarded. Antivirus software that filters access to a running process was enough to leave one renderer unpatched, and an unpatched renderer is the black window. #214 #283
+- Fixed Wand installed in a path longer than 260 characters having its processes ignored and left to fail the integrity check.
+
+### Improvements
+
+- A process the patch could not reach now says what stopped it: that the process was still being created, or that reading it was refused, and which error said so - in the words Windows itself uses, not a bare number to look up. Those were one message before and they call for opposite answers: the first is a moment's wait, the second is something on the machine standing in the way. #283
+- Wand marked *Run as administrator* is now reported as exactly that, instead of a bare Windows error number.
+- "No Wand install found" now reaches the window that opens because of it.
+
 ## [2.0.0.0] - 2026-09-05
 
 ### Important
@@ -104,7 +174,7 @@ The newest entry must match the version in `WandEnhancer/Properties/AssemblyInfo
 
 ### Important
 
-- Official releases no longer include downloadable `.exe` files. To update, sync your fork and rerun the `Build executable` workflow, or follow the instructions in [How to use](https://github.com/k1tbyte/Wand-Enhancer#-how-to-use).
+- Official releases no longer include downloadable `.exe` files. To update, sync your fork and rerun the `Build executable` workflow, or follow the instructions in [How to use](https://github.com/k1tbyte/Wand-Enhancer#how-to-use).
 
 ### Changed
 

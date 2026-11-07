@@ -6,6 +6,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
+using WandEnhancer.Core.Services;
 using WandEnhancer.Models;
 using WandEnhancer.Utils;
 
@@ -18,12 +19,49 @@ namespace WandEnhancer.View.Popups
         private readonly Action<PatchConfig> _onApply;
         private readonly ObservableCollection<SelectedScript> _selectedScripts = new ObservableCollection<SelectedScript>();
 
-        public PatchVectorsPopup(Action<PatchConfig> onApply)
+        public PatchVectorsPopup(Action<PatchConfig> onApply, PatchConfig saved = null)
         {
             _onApply = onApply;
             InitializeComponent();
             ScriptList.ItemsSource = _selectedScripts;
+            LoadStrategies();
+            if (saved != null)
+            {
+                ApplySaved(saved);
+            }
             UpdateScriptsEmptyState();
+        }
+
+        private void ApplySaved(PatchConfig saved)
+        {
+            var types = saved.PatchTypes ?? new HashSet<EPatchType>();
+            ActivateProBox.IsChecked = types.Contains(EPatchType.ActivatePro);
+            DisableUpdateBox.IsChecked = types.Contains(EPatchType.DisableUpdates);
+            DevToolsHotkeyBox.IsChecked = types.Contains(EPatchType.DevToolsOnF12);
+            RemoteWebPanelPreviewBox.IsChecked = types.Contains(EPatchType.RemoteWebPanelPreview);
+            AutoApplyBox.IsChecked = saved.AutoApplyAfterUpdate;
+
+            var match = (StrategyComboBox.ItemsSource as System.Collections.Generic.IEnumerable<StrategyItem>)
+                ?.FirstOrDefault(item => item.Strategy == saved.Strategy);
+            if (match != null)
+            {
+                StrategyComboBox.SelectedItem = match;
+            }
+
+            foreach (var path in (saved.CustomScriptPaths ?? new List<string>()).Where(WeModInstalls.IsJavaScriptFile))
+            {
+                AddScript(path);
+            }
+        }
+
+        private void LoadStrategies()
+        {
+            StrategyComboBox.ItemsSource = new[]
+            {
+                new StrategyItem(EPatchStrategy.Static, LocalizationManager.Get("pv_strategy_static")),
+                new StrategyItem(EPatchStrategy.Supervised, LocalizationManager.Get("pv_strategy_supervised"))
+            };
+            StrategyComboBox.SelectedIndex = 0; // Static is the default
         }
 
         private void OnAddScriptClick(object sender, RoutedEventArgs e)
@@ -98,6 +136,7 @@ namespace WandEnhancer.View.Popups
             _onApply(new PatchConfig
             {
                 PatchTypes = result,
+                Strategy = (StrategyComboBox.SelectedItem as StrategyItem)?.Strategy ?? EPatchStrategy.Static,
                 CustomScriptPaths = _selectedScripts.Select(script => script.FullPath).ToList(),
                 AutoApplyAfterUpdate = AutoApplyBox.IsChecked == true
             });
@@ -117,6 +156,19 @@ namespace WandEnhancer.View.Popups
         private void UpdateScriptsEmptyState()
         {
             NoScriptsText.Visibility = _selectedScripts.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private sealed class StrategyItem
+        {
+            public StrategyItem(EPatchStrategy strategy, string displayName)
+            {
+                Strategy = strategy;
+                DisplayName = displayName;
+            }
+
+            public EPatchStrategy Strategy { get; }
+
+            public string DisplayName { get; }
         }
 
         private sealed class SelectedScript

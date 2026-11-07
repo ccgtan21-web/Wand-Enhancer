@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using WandEnhancer.Core;
+using WandEnhancer.Core.Patching.Strategies;
 using WandEnhancer.Models;
 using WandEnhancer.Utils;
 using WandEnhancer.View.MainWindow;
@@ -22,11 +23,16 @@ namespace WandEnhancer
         [STAThread]
         public static void Main(string[] args)
         {
-            if (TryLaunchMode(args))
-                return;
-
+            // Attached first: launch mode has no window of its own, so a crash in there would
+            // otherwise be a Windows error box with none of our own words in it.
             AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
             TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+
+            if (TryWatchMode(args))
+                return;
+
+            if (TryLaunchMode(args))
+                return;
 
             bool startupFailed = StartupLog.Exists(entry => entry.Value == ELogType.Error);
 
@@ -40,6 +46,22 @@ namespace WandEnhancer
 
             application.MainWindow = window;
             application.Run();
+        }
+
+        /// <summary>
+        /// Background-watcher mode: <c>--watch-updates &lt;squirrelRoot&gt;</c>. Blocks until told to
+        /// stop; never touches the UI. Deployed and started by
+        /// <see cref="Core.Services.WatcherAutostart"/>, not something a user runs by hand.
+        /// </summary>
+        private static bool TryWatchMode(string[] args)
+        {
+            if (args.Length < 2 || !string.Equals(args[0], "--watch-updates", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            string squirrelRoot = args[1];
+            LauncherLog.Open(squirrelRoot, $"WandEnhancerWatcher {Constants.Version} build {Constants.Build} | root {squirrelRoot}");
+            Core.Services.UpdateWatcherService.Run(squirrelRoot, LauncherLog.Write);
+            return true;
         }
 
         private static bool TryLaunchMode(string[] args)
@@ -63,7 +85,7 @@ namespace WandEnhancer
             if (args.Length > 0 &&
                 args[0].StartsWith("--squirrel", StringComparison.OrdinalIgnoreCase))
             {
-                string updateExe = Path.Combine(myDir, "Update.exe");
+                string updateExe = Path.Combine(myDir, Constants.SquirrelUpdaterFileName);
                 if (File.Exists(updateExe))
                 {
                     LauncherLog.Write($"Squirrel hook {args[0]} forwarded to Update.exe.", ELogType.Info);
@@ -80,7 +102,9 @@ namespace WandEnhancer
             var config = WeModInstalls.FindLatestWeMod(myDir);
             if (config == null)
             {
-                LauncherLog.Write($"No Wand install found under {myDir}; opening the UI instead.", ELogType.Error);
+                // RecordStartupLog, not LauncherLog.Write: the window is about to open, and this is
+                // the line that explains why.
+                RecordStartupLog($"No Wand install found under {myDir}; opening the UI instead.", ELogType.Error);
                 return false;
             }
 
@@ -97,7 +121,8 @@ namespace WandEnhancer
 #endif
 
             // Use RecordStartupLog so launcher output survives into the UI on failure.
-            return FuseLauncher.Launch(config.ExecutablePath, forwardedArgs, RecordStartupLog);
+            var strategy = StrategyFactory.Create(patchConfig?.Strategy ?? EPatchStrategy.Supervised);
+            return strategy.Launch(new PatchContext(config, RecordStartupLog), forwardedArgs);
         }
 
 
@@ -151,7 +176,7 @@ namespace WandEnhancer
         /// <summary>
         /// Describes applied patches for diagnostic logs. Unrecorded if auto-patch is off.
         /// </summary>
-        private static string DescribePatches(PatchConfig patchConfig)
+        internal static string DescribePatches(PatchConfig patchConfig)
         {
             if (patchConfig?.PatchTypes == null)
                 return "unrecorded";
@@ -161,8 +186,8 @@ namespace WandEnhancer
 
         private static bool TryAutoPatch(WeModConfig config, PatchConfig patchConfig)
         {
-            if (patchConfig == null)
-                return true; // nothing saved to replay; launch as-is
+            if (patchConfig == null || !patchConfig.AutoApplyAfterUpdate)
+                return true; // nothing to replay; launch as-is
 
             try
             {
